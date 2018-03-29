@@ -5,7 +5,7 @@ const axios = require('axios');
 
 const Retailer = require('../models/retailer');
 const { runGeoQuery } = require('../helpers/geolocation');
-const { parseCsv } = require('../helpers/csv');
+const { parseCsv, cleanseAddresses } = require('../helpers/csv');
 const { capitalize, truncateCoordinates } = require('../helpers/utility');
 
 const googleMapsClient = require('@google/maps').createClient({
@@ -19,7 +19,7 @@ const googleMapsClient = require('@google/maps').createClient({
 
 // eslint-disable-next-line consistent-return
 async function geocodeAddress(retailer) {
-  const address = `${retailer.address}, ${retailer.city}, ${retailer.state} ${
+  const address = `${retailer.address_1}, ${retailer.city}, ${retailer.state} ${
     retailer.zip
   }`;
 
@@ -28,30 +28,41 @@ async function geocodeAddress(retailer) {
     .asPromise();
 
   if (googleResponse.json.status !== 'OK') {
-    // TODO: handle error, return something!
-    console.log(googleResponse.json.status);
-    console.log(retailer);
-  } else {
-    const { lat, lng } = googleResponse.json.results[0].geometry.location;
-
-    return truncateCoordinates([lng, lat]);
+    return {
+      error: googleResponse.json.status,
+      coordinates: null,
+      zip: null,
+    };
   }
+
+  const { lat, lng } = googleResponse.json.results[0].geometry.location;
+
+  let zip;
+
+  if (!retailer.zip) {
+    zip = googleResponse.json.results[0].address_components.find(
+      component => component.types[0] === 'postal_code'
+    );
+  }
+
+  return {
+    error: null,
+    coordinates: truncateCoordinates([lng, lat]),
+    zip: zip ? zip.long_name : null,
+  };
 }
 
 async function createRetailer(retailer) {
-  const geocoded = await geocodeAddress(retailer);
+  const { coordinates, zip, error } = await geocodeAddress(retailer);
+
+  if (error) return { error, retailer };
 
   return new Retailer({
     location: {
-      coordinates: geocoded, // lng, lat
+      coordinates, // [lng, lat]
     },
-    name: retailer.retailer,
-    address: retailer.address,
-    city: retailer.city,
-    state: retailer.state,
-    zip: retailer.zip,
-    launch_date: retailer.launch_date,
-    recipes_offered: retailer.recipes_offered,
+    ...retailer,
+    zip: zip || retailer.zip,
   }).save();
 }
 
@@ -59,8 +70,8 @@ async function processRetailer(retailer) {
   // check if retailer exists
   const existingRetailer = await Retailer.findOne(
     {
-      name: capitalize(retailer.retailer),
-      address: capitalize(retailer.address),
+      name: capitalize(retailer.name),
+      address_1: capitalize(retailer.address_1),
     },
     '_id'
   );
@@ -70,8 +81,6 @@ async function processRetailer(retailer) {
 
   // process the retailer (geocode and save)
   const newRetailer = await createRetailer(retailer);
-
-  // TODO: Need to look into error here
   return newRetailer;
 }
 
@@ -95,15 +104,38 @@ exports.test = async function test(req, res, next) {
 };
 
 exports.SyncRetailers = async function SyncRetailers(req, res, next) {
-  const csv = (await axios.get(process.env.GOOGLE_SHEET_URL)).data;
+  const csvBuffer = (await axios.get(process.env.GOOGLE_SHEET_URL)).data;
+  const csv = parseCsv(csvBuffer);
 
-  // get the retailers
-  const retailers = parseCsv(csv);
+  const retailers = cleanseAddresses(csv);
 
-  // process them
-  const newRetailers = await Promise.all(
+  const processedRetailers = await Promise.all(
     retailers.map(retailer => processRetailer(retailer))
   );
 
-  res.json(newRetailers);
+  const errors = processedRetailers.filter(
+    retailer => retailer && retailer.error
+  );
+
+  const newRetailers = processedRetailers.filter(
+    retailer => retailer && !retailer.error
+  );
+
+  let responseObj = {
+    errors,
+    message: 'No new retailers added.',
+    new_retailers: [],
+  };
+
+  if (newRetailers.length > 0) {
+    responseObj = {
+      errors,
+      message: `${newRetailers.length} of ${
+        retailers.length
+      } retailers added successfully.`,
+      new_retailers: newRetailers,
+    };
+  }
+
+  res.json(responseObj);
 };
