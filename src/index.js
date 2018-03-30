@@ -4,6 +4,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const bodyParser = require('body-parser');
 const logger = require('morgan');
+const cors = require('cors');
 
 const routes = require('./routes');
 
@@ -17,23 +18,17 @@ if (process.env.NODE_ENV !== 'test') {
   app.use(logger('dev'));
 }
 
+const corsOptions = {
+  origin: ['https://staging.chefd.com', 'https://chefd.com'],
+  optionsSuccessStatus: 200,
+};
+
+app.use(cors(corsOptions));
+
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
 
 app.use('/', routes);
-
-app.get('/test', (req, res) => {
-  const testPayload = [
-    { id: 1, message: 'Hello, world!' },
-    {
-      id: 2,
-      message: 'If you are seeing this, it means everything is working!',
-    },
-    { id: 3, message: 'I hope this saves you some time :)' },
-  ];
-
-  res.json(testPayload);
-});
 
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
