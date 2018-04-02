@@ -4,7 +4,7 @@
 const axios = require('axios');
 
 const Retailer = require('../models/retailer');
-const { runGeoQuery } = require('../helpers/geolocation');
+const { runRetailerQuery } = require('../helpers/geolocation');
 const { parseCsv, cleanseAddresses } = require('../helpers/csv');
 const { capitalize, truncateCoordinates } = require('../helpers/utility');
 
@@ -85,11 +85,8 @@ async function processRetailer(retailer) {
 }
 
 exports.ListRetailers = async function ListRetailers(req, res, next) {
-  if (req.query && req.query.lat && req.query.lng) {
-    return runGeoQuery(req, res, Retailer);
-  }
+  const retailers = await runRetailerQuery(req, res, Retailer);
 
-  const retailers = await Retailer.find({});
   res.json(retailers);
 };
 

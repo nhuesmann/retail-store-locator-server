@@ -15,8 +15,8 @@ const RetailerSchema = new Schema({
   city: { type: String, trim: true, set: capitalize },
   state: { type: String, trim: true, uppercase: true },
   zip: { type: String, trim: true },
-  launch_date: Date,
-  recipes_offered: Array,
+  launch_date: { type: Date },
+  recipes_offered: { type: Array },
 });
 
 RetailerSchema.index({ location: '2dsphere' });

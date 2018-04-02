@@ -41,6 +41,16 @@ const extractAddressTwo = ({ address, ...rest }) => {
 
 const cleanseZip = zip => (zip.length === 4 ? `0${zip}` : zip.slice(0, 5));
 
+const pluckDesiredProps = retailer => ({
+  name: retailer.name,
+  address_1: retailer.address_1,
+  address_2: retailer.address_2,
+  city: retailer.city,
+  state: retailer.state,
+  zip: retailer.zip,
+  launch_date: retailer.launch_date,
+});
+
 exports.parseCsv = buffer =>
   parse(buffer, {
     columns: validateHeaders,
@@ -56,9 +66,10 @@ exports.cleanseAddresses = retailers =>
       ({ retailer, address, city, state }) =>
         retailer && address && city && state
     )
-    .map(retailer => extractAddressTwo(retailer))
+    .map(location => extractAddressTwo(location))
     .map(({ retailer, zip, ...rest }) => ({
       name: retailer,
       ...rest,
       zip: cleanseZip(zip),
-    }));
+    }))
+    .map(location => pluckDesiredProps(location));
