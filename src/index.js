@@ -21,7 +21,7 @@ if (process.env.NODE_ENV !== 'test') {
 const corsOptions = {
   origin: [
     'https://staging.chefd.com',
-    'https://chefd.com',
+    'https://www.chefd.com',
     'http://localhost:3000', // TODO: remove localhost:3000
   ],
   optionsSuccessStatus: 200,
